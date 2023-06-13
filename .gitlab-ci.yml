@@ -25,6 +25,7 @@ pages:
   image: julia:1.9
   stage: deploy
   script:
+    - apt-get update -qq && apt-get install -y git
     - |
       julia --project=docs -e '
         using Pkg
