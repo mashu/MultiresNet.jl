@@ -55,13 +55,12 @@ module MultiresNet
         for i in depth:-1:1
                 exponent = depth-i
                 padding = (2^exponent) * (kernel_size -1)
-                res_lo_pad = pad_constant(res_lo, (padding, 0), dims=1)
-                res_hi = conv(res_lo_pad, reverse_dims(m.h1), dilation=2^exponent, groups=groups, flipped=true)
-                res_lo = conv(res_lo_pad, reverse_dims(m.h0), dilation=2^exponent, groups=groups, flipped=true)
-                y .+= flip_dims(flip_dims(res_hi) .* m.w[:,i+1])
+                res_hi = conv(res_lo, reverse_dims(m.h1), dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
+                res_lo = conv(res_lo, reverse_dims(m.h0), dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
+                y = (y .+ flip_dims(flip_dims(res_hi) .* m.w[:,i+1]))
         end
-        y .+= flip_dims(flip_dims(res_lo) .* m.w[:,1]) # Same as in PyTorch
-        y .+= flip_dims(flip_dims(xin) .* m.w[:,end])  # Same as in PyTorch
+        y = (y .+ flip_dims(flip_dims(res_lo) .* m.w[:,1]))
+        y = (y .+ flip_dims(flip_dims(xin) .* m.w[:,end]))
         σ.(y)
     end
 
