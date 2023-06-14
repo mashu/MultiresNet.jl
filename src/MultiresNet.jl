@@ -1,7 +1,6 @@
 module MultiresNet
     using Flux: conv, Conv, glorot_uniform, gelu, @functor, pad_constant
     using Flux.NNlib: glu
-    using Zygote
 
     """
         reverse_dims(x)

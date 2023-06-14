@@ -20,7 +20,9 @@ using Test
     w[3,:] .= [3.0, 4.0, 5.0, 7.0, 8.0, 9.0]
     seq_block = MultiresNet.MultiresBlock(h, h, w)
     @test seq_block != nothing
+    # Test if forward pass matches
     output = seq_block(MultiresNet.reverse_dims(x))[:,:,1]'
     @test output ≈ [1071.0 2940.0 6121.0 10153.0; 71360.0 148037.0 290440.0 439288.0; 1.394145e6 2.826942e6 5.562655e6 8.346751e6]
+    # Test gradients
+    @test sum(sum(Flux.gradient(xin->sum(seq_block(xin)),x))) != 0
 end
-
