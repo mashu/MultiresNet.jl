@@ -8,6 +8,7 @@ Julia implementation of [Sequence Modeling with Multiresolution Convolutional Me
 - [x] MultiresNet blocks
   - [x] Forward-fading
   - [ ] Forward-uniform
+  - [ ] Masked global pooling with sequence length
 - [ ] Tests
 - [ ] Examples
   - [x] Classification

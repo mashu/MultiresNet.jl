@@ -7,7 +7,7 @@ module MultiresNet
 
     Reverse all dimensions in 3D array
     """
-    function reverse_dims(x::Array{T,3}) where T
+    function reverse_dims(x::AbstractArray{T,3}) where T
         permutedims(x, (3,2,1))
     end
 
@@ -16,7 +16,7 @@ module MultiresNet
 
     Flip second with first dimension in 3D array
     """
-    function flip_dims(x::Array{T,3}) where T
+    function flip_dims(x::AbstractArray{T,3}) where T
         permutedims(x, (2,1,3))
     end
 
@@ -52,11 +52,11 @@ module MultiresNet
         y = zeros(size(xin))
         groups = size(xin)[2]
         for i in depth:-1:1
-                exponent = depth-i
-                padding = (2^exponent) * (kernel_size -1)
-                res_hi = conv(res_lo, reverse_dims(m.h1), dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
-                res_lo = conv(res_lo, reverse_dims(m.h0), dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
-                y = (y .+ flip_dims(flip_dims(res_hi) .* m.w[:,i+1]))
+            exponent = depth-i
+            padding = (2^exponent) * (kernel_size -1)
+            res_hi = conv(res_lo, reverse_dims(m.h1), dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
+            res_lo = conv(res_lo, reverse_dims(m.h0), dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
+            y = (y .+ flip_dims(flip_dims(res_hi) .* m.w[:,i+1]))
         end
         y = (y .+ flip_dims(flip_dims(res_lo) .* m.w[:,1]))
         y = (y .+ flip_dims(flip_dims(xin) .* m.w[:,end]))
