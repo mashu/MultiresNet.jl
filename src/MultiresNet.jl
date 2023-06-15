@@ -2,6 +2,9 @@ module MultiresNet
     using Flux: conv, Conv, glorot_uniform, gelu, @functor, pad_constant
     using Flux.NNlib: glu
     using CUDA
+    using Zygote
+
+    Zygote.@adjoint CUDA.zeros(x...) = CUDA.zeros(x...), _ -> map(_ -> nothing, x)
 
     """
         reverse_dims(x)
