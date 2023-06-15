@@ -4,15 +4,16 @@ using MultiresNet
 using OneHotArrays
 using ProgressMeter
 using CUDA
+CUDA.math_mode!(CUDA.PEDANTIC_MATH)
 
 # Hyperparameters
 d_input = 3
 d_output = 10
 max_length = 1024
-d_model = 256
+d_model = 64
 depth = 4
 kernel_size = 4
-batch_size = 16
+batch_size = 64
 
 trainset = CIFAR10(:train)
 trainloader = Flux.DataLoader(trainset, batchsize=batch_size)
@@ -22,7 +23,7 @@ model = Chain(
     SkipConnection(
         Chain(MultiresNet.MultiresBlock(d_model, depth, kernel_size),
               MultiresNet.MixingBlock(d_model)),
-        +),
+    +),
     LayerNorm(max_length),
     SkipConnection(
         Chain(MultiresNet.MultiresBlock(d_model, depth, kernel_size),
@@ -30,23 +31,24 @@ model = Chain(
         +),
     LayerNorm(max_length),
     GlobalMeanPool(),
-    x->x[1,:,:],
+    Flux.flatten,
     Dense(d_model, d_output)) |> gpu
 
-optim = Flux.setup(Flux.Adam(0.01), model)
-
+optim = Flux.Adam(1e-4)
+ps = Flux.params(model)
 # Training loop
 losses = []
-@showprogress for epoch in 1:10
+for epoch in 1:100
     for (batch_ind, batch) in enumerate(trainloader)
         input, target = batch
-        x = Float32.(MultiresNet.flatten_image(input))  |> gpu # 1024 x 3 x 128 (seq x channels x batch)
-        y = onehotbatch(target, 0:9)                    |> gpu # 10 x 128 (class x batch)
-        loss, grads = Flux.withgradient(model) do m
+        x = Float32.(MultiresNet.flatten_image(input))   |> gpu # 1024 x 3 x 128 (seq x channels x batch)
+        y = onehotbatch(target, 0:9)                     |> gpu # 10 x 128 (class x batch)
+        loss, grads = Flux.withgradient(ps) do
             y_hat = model(x)
             Flux.Losses.logitcrossentropy(y_hat, y)
         end
-        Flux.update!(optim, model, grads[1])
+        Flux.update!(optim, ps, grads)
         push!(losses, loss)
     end
+    println(losses[end])
 end

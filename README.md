@@ -12,4 +12,8 @@ Julia implementation of [Sequence Modeling with Multiresolution Convolutional Me
 - [ ] Tests
 - [ ] Examples
   - [x] Classification
+    - [x] CPU
+    - [x] GPU
   - [ ] Autoregressive
+    - [ ] CPU
+    - [ ] GPU
