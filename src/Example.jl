@@ -12,9 +12,10 @@ max_length = 1024
 d_model = 256
 depth = 4
 kernel_size = 4
+batch_size = 16
 
 trainset = CIFAR10(:train)
-trainloader = Flux.DataLoader(trainset, batchsize=128)
+trainloader = Flux.DataLoader(trainset, batchsize=batch_size)
 
 model = Chain(
     MultiresNet.EmbeddBlock(d_input, d_model),
@@ -39,8 +40,8 @@ losses = []
 @showprogress for epoch in 1:10
     for (batch_ind, batch) in enumerate(trainloader)
         input, target = batch
-        x = MultiresNet.flatten_image(input) |> gpu # 1024 x 3 x 128 (seq x channels x batch)
-        y = onehotbatch(target, 0:9)         |> gpu # 10 x 128 (class x batch)
+        x = Float32.(MultiresNet.flatten_image(input))  |> gpu # 1024 x 3 x 128 (seq x channels x batch)
+        y = onehotbatch(target, 0:9)                    |> gpu # 10 x 128 (class x batch)
         loss, grads = Flux.withgradient(model) do m
             y_hat = model(x)
             Flux.Losses.logitcrossentropy(y_hat, y)

@@ -1,6 +1,7 @@
 module MultiresNet
     using Flux: conv, Conv, glorot_uniform, gelu, @functor, pad_constant
     using Flux.NNlib: glu
+    using CUDA
 
     """
         reverse_dims(x)
@@ -49,7 +50,7 @@ module MultiresNet
         depth = size(m.w)[2]-2
         d_channels = size(xin)[2]
         res_lo = xin
-        y = zeros(size(xin))
+        y = isa(xin, CuArray) ? CUDA.zeros(eltype(xin), size(xin)) : zeros(eltype(xin), size(xin))
         groups = size(xin)[2]
         for i in depth:-1:1
             exponent = depth-i
