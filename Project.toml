@@ -15,6 +15,9 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 CUDA = "4.3.2"
 Flux = "0.13.16"
 MLDatasets = "0.7.9"
+OneHotArrays = "0.2.3"
+ProgressMeter = "1.7.2"
+Zygote = "0.6.62"
 julia = "1.9"
 
 [extras]

@@ -34,6 +34,12 @@ model = Chain(
     Flux.flatten,
     Dense(d_model, d_output)) |> gpu
 
+function accuracy(ŷ,y)
+    correct = sum((onecold(ŷ, 0:9) |> cpu) .== y)
+    total = length(y)
+    "Accuracy: $correct / $total ($(correct/total))"
+end
+
 optim = Flux.Adam(1e-4)
 ps = Flux.params(model)
 # Training loop
@@ -49,6 +55,8 @@ for epoch in 1:100
         end
         Flux.update!(optim, ps, grads)
         push!(losses, loss)
+        if batch_ind % 100 == 0
+            println("Loss: $(losses[end]) $(accuracy(model(x), target))")
+        end
     end
-    println(losses[end])
 end
