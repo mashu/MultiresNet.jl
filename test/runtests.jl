@@ -1,5 +1,6 @@
 using MultiresNet
 using Test
+using Flux
 
 @testset "MultiresNet.jl" begin
     channels = 3
