@@ -1,6 +1,7 @@
 using MultiresNet
 using Test
 using Flux
+using CUDA
 
 @testset "MultiresNet.jl" begin
     channels = 3
@@ -26,4 +27,10 @@ using Flux
     @test output ≈ [1071.0 2940.0 6121.0 10153.0; 71360.0 148037.0 290440.0 439288.0; 1.394145e6 2.826942e6 5.562655e6 8.346751e6]
     # Test gradients
     @test sum(sum(Flux.gradient(xin->sum(seq_block(xin)),x))) != 0
+    # Test helper functions
+    @test MultiresNet.flatten_image(Flux.unsqueeze(x, dims=1)) |> size == (1,3,4)
+    @test MultiresNet.reverse_dims(x) |>size == (4,3,1)
+    @test MultiresNet.flip_dims(x) |>size == (3,1,4)
+    # Test adjoint for zeros on CUDA
+    @test sum(sum(Flux.gradient(x->sum(x), CUDA.zeros(10)))) == 10
 end
