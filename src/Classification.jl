@@ -120,7 +120,7 @@ for epoch in 1:n
         test_correct += correct(test_y_hat, test_target)
     end
     # Compute statistics
-    println("Epoch $epoch, Train loss: $(train_loss/train_total) Test loss: $(test_loss/test_total) Train acc: $(train_correct/train_total) Test acc: $(test_correct/test_total)")
+    println("Epoch $epoch, Train loss: $(train_loss*batch_size/train_total) Test loss: $(test_loss*batch_size/test_total) Train acc: $(train_correct/train_total) Test acc: $(test_correct/test_total)")
     # Checkpoint
     jldsave("model-checkpoint-epoch$(epoch).jld2", model_state = Flux.state(cpu(model)))
 end
