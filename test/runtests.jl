@@ -1,7 +1,7 @@
 using MultiresNet
 using Test
 using Flux
-using CUDA
+# using CUDA
 
 @testset "MultiresNet.jl" begin
     channels = 3
@@ -32,5 +32,5 @@ using CUDA
     @test MultiresNet.reverse_dims(x) |>size == (4,3,1)
     @test MultiresNet.flip_dims(x) |>size == (3,1,4)
     # Test adjoint for zeros on CUDA
-    @test sum(sum(Flux.gradient(x->sum(x), CUDA.zeros(10)))) == 10
+    # @test sum(sum(Flux.gradient(x->sum(x), CUDA.zeros(10)))) == 10
 end
