@@ -20,7 +20,7 @@ using Flux
     w[1,:] .= [1.0, 2.0, 3.0, 5.0, 6.0, 7.0]
     w[2,:] .= [1.0, 2.0, 3.0, 6.0, 7.0, 8.0]
     w[3,:] .= [3.0, 4.0, 5.0, 7.0, 8.0, 9.0]
-    seq_block = MultiresNet.MultiresBlock(h, h, w)
+    seq_block = MultiresNet.MultiresBlock(MultiresNet.reverse_dims(h), MultiresNet.reverse_dims(h), w)
     @test seq_block != nothing
     # Test if forward pass matches
     output = seq_block(MultiresNet.reverse_dims(x))[:,:,1]'
@@ -34,3 +34,19 @@ using Flux
     # Test adjoint for zeros on CUDA
     # @test sum(sum(Flux.gradient(x->sum(x), CUDA.zeros(10)))) == 10
 end
+
+# Flux.unsqueeze(w',dims=2)
+# x|>size
+# x .* Flux.unsqueeze(w',dims=2)
+
+# function pairwise_product(x::AbstractArray{T,3}, w::AbstractArray{T,2}) where T
+#     PermutedDimsArray(PermutedDimsArray(x, (2,1,3)) .* w, (2,1,3))
+# end
+
+# function old_pairwise_product(x::AbstractArray{T,3}, w::AbstractArray{T,2}) where T
+#     MultiresNet.flip_dims(MultiresNet.flip_dims(x) .* w)
+# end
+# using BenchmarkTools
+
+# bench1 = @benchmark old_pairwise_product(x,w)
+# bench2 = @benchmark pairwise_product(x,w)

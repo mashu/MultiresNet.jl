@@ -37,8 +37,8 @@ module MultiresNet
     Basic MultiresBlock building block for layer that performes multiresolution convolution without mixing
     """
     function MultiresBlock(channels::Int, depth::Int, kernel_size::Int)
-        h0 = glorot_uniform(channels, 1, kernel_size)
-        h1 = glorot_uniform(channels, 1, kernel_size)
+        h0 = glorot_uniform(kernel_size, 1, channels)
+        h1 = glorot_uniform(kernel_size, 1, channels)
         w = glorot_uniform(channels, depth + 2)
         MultiresBlock(h0, h1, w)
     end
@@ -49,7 +49,7 @@ module MultiresNet
     Object-like function that takes input data through the MultiresBlock
     """
     function (m::MultiresBlock)(xin; σ=gelu)
-        kernel_size=size(m.h0)[3]
+        kernel_size=size(m.h0)[1]
         depth = size(m.w)[2]-2
         d_channels = size(xin)[2]
         res_lo = xin
@@ -58,8 +58,8 @@ module MultiresNet
         for i in depth:-1:1
             exponent = depth-i
             padding = (2^exponent) * (kernel_size -1)
-            res_hi = conv(res_lo, reverse_dims(m.h1), dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
-            res_lo = conv(res_lo, reverse_dims(m.h0), dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
+            res_hi = conv(res_lo, m.h1, dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
+            res_lo = conv(res_lo, m.h0, dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
             y = (y .+ flip_dims(flip_dims(res_hi) .* m.w[:,i+1]))
         end
         y = (y .+ flip_dims(flip_dims(res_lo) .* m.w[:,1]))
