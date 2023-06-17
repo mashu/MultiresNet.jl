@@ -1,28 +1,13 @@
 module MultiresNet
-    using Flux: conv, Conv, glorot_uniform, gelu, @functor, pad_constant
+    using Flux: conv, Conv, glorot_uniform, gelu, @functor
     using Flux.NNlib: glu
     using CUDA
     using Zygote
+    using Tullio
 
     Zygote.@adjoint CUDA.zeros(x...) = CUDA.zeros(x...), _ -> map(_ -> nothing, x)
 
-    """
-        reverse_dims(x)
-
-    Reverse all dimensions in 3D array
-    """
-    function reverse_dims(x::AbstractArray{T,3}) where T
-        permutedims(x, (3,2,1))
-    end
-
-    """
-        flip_dims(x)
-
-    Flip second with first dimension in 3D array
-    """
-    function flip_dims(x::AbstractArray{T,3}) where T
-        permutedims(x, (2,1,3))
-    end
+    bmm_vec(A,B) = @tullio C[i,j,k] := A[i,j,k] * B[j]
 
     struct MultiresBlock
         h0::AbstractArray
@@ -39,7 +24,7 @@ module MultiresNet
     function MultiresBlock(channels::Int, depth::Int, kernel_size::Int)
         h0 = glorot_uniform(kernel_size, 1, channels)
         h1 = glorot_uniform(kernel_size, 1, channels)
-        w = glorot_uniform(channels, depth + 2)
+        w = glorot_uniform(depth + 2, channels)
         MultiresBlock(h0, h1, w)
     end
 
@@ -50,7 +35,7 @@ module MultiresNet
     """
     function (m::MultiresBlock)(xin; σ=gelu)
         kernel_size=size(m.h0)[1]
-        depth = size(m.w)[2]-2
+        depth = size(m.w)[1]-2
         d_channels = size(xin)[2]
         res_lo = xin
         y = isa(xin, CuArray) ? CUDA.zeros(eltype(xin), size(xin)) : zeros(eltype(xin), size(xin))
@@ -60,10 +45,10 @@ module MultiresNet
             padding = (2^exponent) * (kernel_size -1)
             res_hi = conv(res_lo, m.h1, dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
             res_lo = conv(res_lo, m.h0, dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
-            y = (y .+ flip_dims(flip_dims(res_hi) .* m.w[:,i+1]))
+            y = (y .+ bmm_vec(res_hi, m.w[i+1,:]))
         end
-        y = (y .+ flip_dims(flip_dims(res_lo) .* m.w[:,1]))
-        y = (y .+ flip_dims(flip_dims(xin) .* m.w[:,end]))
+        y = (y .+ bmm_vec(res_lo, m.w[1,:]))
+        y = (y .+ bmm_vec(xin, m.w[end,:]))
         σ.(y)
     end
 
