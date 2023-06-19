@@ -1,5 +1,5 @@
 module MultiresNet
-    using Flux: conv, Conv, glorot_uniform, gelu, @functor, pad_constant
+    using Flux: conv, Conv, glorot_uniform, gelu, @functor, unsqueeze
     using Flux.NNlib: glu
     using CUDA
     using Zygote
@@ -39,7 +39,7 @@ module MultiresNet
     function MultiresBlock(channels::Int, depth::Int, kernel_size::Int)
         h0 = glorot_uniform(kernel_size, 1, channels)
         h1 = glorot_uniform(kernel_size, 1, channels)
-        w = glorot_uniform(channels, depth + 2)
+        w = unsqueeze(glorot_uniform(channels, depth + 2), dims=1)
         MultiresBlock(h0, h1, w)
     end
 
@@ -50,7 +50,7 @@ module MultiresNet
     """
     function (m::MultiresBlock)(xin; σ=gelu)
         kernel_size=size(m.h0)[1]
-        depth = size(m.w)[2]-2
+        depth = size(m.w)[3]-2
         d_channels = size(xin)[2]
         res_lo = xin
         y = isa(xin, CuArray) ? CUDA.zeros(eltype(xin), size(xin)) : zeros(eltype(xin), size(xin))
@@ -60,10 +60,10 @@ module MultiresNet
             padding = (2^exponent) * (kernel_size -1)
             res_hi = conv(res_lo, m.h1, dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
             res_lo = conv(res_lo, m.h0, dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
-            y = (y .+ flip_dims(flip_dims(res_hi) .* m.w[:,i+1]))
+            y = y .+ (res_hi .* m.w[:,:,i+1])
         end
-        y = (y .+ flip_dims(flip_dims(res_lo) .* m.w[:,1]))
-        y = (y .+ flip_dims(flip_dims(xin) .* m.w[:,end]))
+        y = y .+ (res_lo .* m.w[:,:,1])
+        y = y .+ (xin .*m.w[:,:,end])
         σ.(y)
     end
 
