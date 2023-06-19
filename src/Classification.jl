@@ -105,7 +105,7 @@ model = Chain(
     Dense(d_model, d_output)) |> gpu
 
 schedule = Stateful(CosAnneal(λ0 = 1f-4, λ1 = 1f-2, period = 10))
-optim = Flux.Optimiser(Flux.WeightDecay(1f-5), Flux.Adam(1f-3))
+optim = Flux.Optimiser(Flux.WeightDecay(1f-5), Flux.AdamW(1f-3))
 ps = Flux.params(model)
 
 # Training loop for 40 epochs
