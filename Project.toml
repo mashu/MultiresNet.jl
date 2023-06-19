@@ -11,7 +11,6 @@ MLDatasets = "eb30cadb-4394-5ae3-aed4-317e484a6458"
 OneHotArrays = "0b1bfda6-eb8a-41d2-88d8-f5af5cad476f"
 ParameterSchedulers = "d7d3b36b-41b8-4d0d-a2bf-768c6151755e"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
-Tullio = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
@@ -22,7 +21,6 @@ MLDatasets = "0.7.9"
 OneHotArrays = "0.2.3"
 ParameterSchedulers = "0.3.5"
 ProgressMeter = "1.7.2"
-Tullio = "0.3.5"
 Zygote = "0.6.62"
 julia = "1.9"
 

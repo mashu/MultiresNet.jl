@@ -1,6 +1,7 @@
 using MultiresNet
 using Test
 using Flux
+# using CUDA
 
 @testset "MultiresNet.jl" begin
     channels = 3
@@ -19,15 +20,33 @@ using Flux
     w[1,:] .= [1.0, 2.0, 3.0, 5.0, 6.0, 7.0]
     w[2,:] .= [1.0, 2.0, 3.0, 6.0, 7.0, 8.0]
     w[3,:] .= [3.0, 4.0, 5.0, 7.0, 8.0, 9.0]
-    seq_block = MultiresNet.MultiresBlock(permutedims(h,(3,2,1)), permutedims(h,(3,2,1)), permutedims(w,(2,1)))
+    seq_block = MultiresNet.MultiresBlock(MultiresNet.reverse_dims(h), MultiresNet.reverse_dims(h), w)
     @test seq_block != nothing
     # Test if forward pass matches
-    output = seq_block(permutedims(x,(3,2,1)))[:,:,1]'
+    output = seq_block(MultiresNet.reverse_dims(x))[:,:,1]'
     @test output ≈ [1071.0 2940.0 6121.0 10153.0; 71360.0 148037.0 290440.0 439288.0; 1.394145e6 2.826942e6 5.562655e6 8.346751e6]
     # Test gradients
     @test sum(sum(Flux.gradient(xin->sum(seq_block(xin)),x))) != 0
     # Test helper functions
     @test MultiresNet.flatten_image(Flux.unsqueeze(x, dims=1)) |> size == (1,3,4)
+    @test MultiresNet.reverse_dims(x) |>size == (4,3,1)
+    @test MultiresNet.flip_dims(x) |>size == (3,1,4)
     # Test adjoint for zeros on CUDA
     # @test sum(sum(Flux.gradient(x->sum(x), CUDA.zeros(10)))) == 10
 end
+
+# Flux.unsqueeze(w',dims=2)
+# x|>size
+# x .* Flux.unsqueeze(w',dims=2)
+
+# function pairwise_product(x::AbstractArray{T,3}, w::AbstractArray{T,2}) where T
+#     PermutedDimsArray(PermutedDimsArray(x, (2,1,3)) .* w, (2,1,3))
+# end
+
+# function old_pairwise_product(x::AbstractArray{T,3}, w::AbstractArray{T,2}) where T
+#     MultiresNet.flip_dims(MultiresNet.flip_dims(x) .* w)
+# end
+# using BenchmarkTools
+
+# bench1 = @benchmark old_pairwise_product(x,w)
+# bench2 = @benchmark pairwise_product(x,w)
