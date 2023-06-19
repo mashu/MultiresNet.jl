@@ -21,6 +21,7 @@ d_model = 256
 depth = 10
 kernel_size = 2
 batch_size = 64
+dropout = 0.1
 
 trainset = CIFAR10(:train)
 testset = CIFAR10(:test)
@@ -31,52 +32,72 @@ model = Chain(
     MultiresNet.EmbeddBlock(d_input, d_model),
     SkipConnection(
         Chain(MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-              MultiresNet.MixingBlock(d_model)),
+              Dropout(dropout,dims=1),
+              MultiresNet.MixingBlock(d_model),
+              Dropout(dropout,dims=1)),
     +),
     LayerNorm(max_length),
     SkipConnection(
         Chain(MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-              MultiresNet.MixingBlock(d_model)),
+              Dropout(dropout,dims=1),
+              MultiresNet.MixingBlock(d_model),
+              Dropout(dropout,dims=1)),
     +),
     LayerNorm(max_length),
     SkipConnection(
         Chain(MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-              MultiresNet.MixingBlock(d_model)),
+              Dropout(dropout,dims=1),
+              MultiresNet.MixingBlock(d_model),
+              Dropout(dropout,dims=1)),
     +),
     LayerNorm(max_length),
     SkipConnection(
         Chain(MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-              MultiresNet.MixingBlock(d_model)),
+              Dropout(dropout,dims=1),
+              MultiresNet.MixingBlock(d_model),
+              Dropout(dropout,dims=1)),
     +),
     LayerNorm(max_length),
     SkipConnection(
         Chain(MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-              MultiresNet.MixingBlock(d_model)),
+              Dropout(dropout,dims=1),
+              MultiresNet.MixingBlock(d_model),
+              Dropout(dropout,dims=1)),
     +),
     LayerNorm(max_length),
     SkipConnection(
         Chain(MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-              MultiresNet.MixingBlock(d_model)),
+              Dropout(dropout,dims=1),
+              MultiresNet.MixingBlock(d_model),
+              Dropout(dropout,dims=1)),
     +),
     LayerNorm(max_length),
     SkipConnection(
         Chain(MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-              MultiresNet.MixingBlock(d_model)),
+              Dropout(dropout,dims=1),
+              MultiresNet.MixingBlock(d_model),
+              Dropout(dropout,dims=1)),
     +),
     LayerNorm(max_length),
     SkipConnection(
         Chain(MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-              MultiresNet.MixingBlock(d_model)),
+              Dropout(dropout,dims=1),
+              MultiresNet.MixingBlock(d_model),
+              Dropout(dropout,dims=1)),
     +),
     LayerNorm(max_length),
     SkipConnection(
         Chain(MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-              MultiresNet.MixingBlock(d_model)),
+              Dropout(dropout,dims=1),
+              MultiresNet.MixingBlock(d_model),
+              Dropout(dropout,dims=1)),
     +),
     LayerNorm(max_length),
     SkipConnection(
         Chain(MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-              MultiresNet.MixingBlock(d_model)),
+              Dropout(dropout,dims=1),
+              MultiresNet.MixingBlock(d_model),
+              Dropout(dropout,dims=1)),
     +),
     LayerNorm(max_length),
     GlobalMeanPool(),
