@@ -6,6 +6,8 @@ using ProgressMeter
 using CUDA
 using JLD2
 CUDA.math_mode!(CUDA.FAST_MATH)
+using ParameterSchedulers: Stateful, next!
+using ParameterSchedulers
 
 function correct(ŷ,y)
     sum((onecold(ŷ, 0:9) |> cpu) .== y)
@@ -81,13 +83,15 @@ model = Chain(
     Flux.flatten,
     Dense(d_model, d_output)) |> gpu
 
+schedule = Stateful(CosAnneal(λ0 = 1f-4, λ1 = 1f-2, period = 10))
 optim = Flux.Optimiser(Flux.WeightDecay(1f-5), Flux.Adam(1f-3))
 ps = Flux.params(model)
 
 # Training loop for 40 epochs
-n = 40
+n = 400
 # p = Progress(n)
 for epoch in 1:n
+    optim[2][1].eta = next!(schedule)
     train_loss = 0
     train_correct = 0
     test_loss = 0
