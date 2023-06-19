@@ -3,7 +3,7 @@ module MultiresNet
     using Flux.NNlib: glu
     using CUDA
     using Zygote
-
+    CUDA.allowscalar(false)
     Zygote.@adjoint CUDA.zeros(x...) = CUDA.zeros(x...), _ -> map(_ -> nothing, x)
 
     """
