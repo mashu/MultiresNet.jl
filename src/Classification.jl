@@ -10,7 +10,7 @@ using ParameterSchedulers: Stateful, next!
 using ParameterSchedulers
 
 function correct(ŷ,y)
-    sum((onecold(ŷ, 0:9) |> cpu) .== y)
+    sum(onecold(ŷ, 0:9) .== y)
 end
 
 # Hyperparameters
@@ -20,12 +20,12 @@ max_length = 1024
 d_model = 256
 depth = 10
 kernel_size = 2
-batch_size = 50
+batch_size = 64
 drop = 0.1
 
 trainset = CIFAR10(:train)
 testset = CIFAR10(:test)
-trainloader = Flux.DataLoader(trainset, batchsize=batch_size, shuffle=true, partial=true)
+trainloader = Flux.DataLoader(trainset, batchsize=batch_size, shuffle=true, parallel=true)
 testloader = Flux.DataLoader(testset, batchsize=batch_size, shuffle=false)
 
 model = Chain(
@@ -119,11 +119,12 @@ for epoch in 1:n
     test_correct = 0
     test_total = length(testset)
     train_total = length(trainset)
-    ProgressMeter.next!(p; showvalues = [(:epoch, epoch, :eta, optim[2][1].eta)])
-    for (batch_ind, batch) in enumerate(trainloader)
+    ProgressMeter.next!(p; showvalues = [(:epoch, epoch), (:eta, optim[2][1].eta)])
+    # Run trainset
+    for (batch_ind, batch) in enumerate(CUDA.CuIterator(trainloader))
         input, target = batch
-        x = Float32.(MultiresNet.flatten_image(input))   |> gpu # 1024 x 3 x 128 (seq x channels x batch)
-        y = onehotbatch(target, 0:9)                     |> gpu # 10 x 128 (class x batch)
+        x = Float32.(MultiresNet.flatten_image(input))  # 1024 x 3 x 128 (seq x channels x batch)
+        y = onehotbatch(target, 0:9)                    # 10 x 128 (class x batch)
         let y_hat
             loss, grads = Flux.withgradient(ps) do
                 y_hat = model(x)
@@ -136,17 +137,16 @@ for epoch in 1:n
         end      
     end
     # Run testset
-    for (test_batch_ind, test_batch) in enumerate(testloader)
+    for (test_batch_ind, test_batch) in enumerate(CUDA.CuIterator(testloader))
         test_input, test_target = test_batch
-        test_x = Float32.(MultiresNet.flatten_image(test_input)) |> gpu
-        test_y = onehotbatch(test_target, 0:9)                   |> gpu
+        test_x = Float32.(MultiresNet.flatten_image(test_input))
+        test_y = onehotbatch(test_target, 0:9)
         test_y_hat = model(test_x)
         test_loss += Flux.Losses.logitcrossentropy(test_y_hat, test_y)
         test_correct += correct(test_y_hat, test_target)
     end
     # Compute statistics
-    @info "Epoch $epoch, Train loss: $(train_loss*batch_size/train_total) Test loss: $(test_loss*batch_size/test_total) Train acc: $(train_correct/train_total) Test acc: $(test_correct/test_total)"
-    @info CUDA.memory_status()
+    println("Epoch $epoch, Train loss: $(train_loss*batch_size/train_total) Test loss: $(test_loss*batch_size/test_total) Train acc: $(train_correct/train_total) Test acc: $(test_correct/test_total)")
     # Checkpoint
     jldsave("model-checkpoint-epoch$(epoch).jld2", model_state = Flux.state(cpu(model)))
 end
