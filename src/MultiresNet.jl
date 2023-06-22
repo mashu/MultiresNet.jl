@@ -31,15 +31,23 @@ module MultiresNet
     end
     @functor MultiresBlock
 
+    function init(dims...)
+        (rand(dims...) .- 1.0) .* sqrt(2.0 / (prod(dims) * 2))
+    end
+
+    function w_init(dims...; depth::Int)
+        (rand(dims...) .- 1.0) .* sqrt(2.0 / ((2*(depth + 1) + 2)))
+    end
+
     """
         MultiresBlock(channels, depth, kernel_size)
 
     Basic MultiresBlock building block for layer that performes multiresolution convolution without mixing
     """
-    function MultiresBlock(channels::Int, depth::Int, kernel_size::Int)
-        h0 = glorot_uniform(kernel_size, 1, channels)
-        h1 = glorot_uniform(kernel_size, 1, channels)
-        w = unsqueeze(glorot_uniform(channels, depth + 2), dims=1)
+    function MultiresBlock(channels::Int, depth::Int, kernel_size::Int; init=init, w_init=w_init)
+        h0 = init(kernel_size, 1, channels)
+        h1 = init(kernel_size, 1, channels)
+        w = unsqueeze(w_init(channels, depth + 2, depth=depth), dims=1)
         MultiresBlock(h0, h1, w)
     end
 
