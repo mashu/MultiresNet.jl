@@ -1,5 +1,5 @@
 module MultiresNet
-    using Flux: conv, Conv, glorot_uniform, gelu, @functor, unsqueeze
+    using Flux: conv, Conv, glorot_uniform, gelu, @functor, unsqueeze, LayerNorm
     using Flux.NNlib: glu
     using CUDA
     using Zygote
@@ -71,8 +71,8 @@ module MultiresNet
         conv
     end
     @functor EmbeddBlock
-    function EmbeddBlock(channels_in::Int, channels_out::Int)
-        conv = Conv((1,), channels_in => channels_out)
+    function EmbeddBlock(channels_in::Int, channels_out::Int; σ=gelu)
+        conv = Conv((1,), channels_in => channels_out, σ)
         EmbeddBlock(conv)
     end
 
@@ -83,6 +83,30 @@ module MultiresNet
     """
     function (m::EmbeddBlock)(zin)
         m.conv(zin)
+    end
+
+    struct ChannelLayerNorm
+        norm
+    end
+    @functor ChannelLayerNorm
+
+    """
+        ChannelLayerNorm(channels_in::Int)
+
+    Layer normalization along channels
+    """
+    function ChannelLayerNorm(channels_in::Int)
+        norm = LayerNorm(channels_in)
+        ChannelLayerNorm(norm)
+    end
+
+    """
+        (m::ChannelLayerNorm)(zin)
+
+    Object-like function applying layer normalization along channels
+    """
+    function (m::ChannelLayerNorm)(zin)
+        flip_dims(m.norm(flip_dims(zin)))
     end
 
     struct MixingBlock
