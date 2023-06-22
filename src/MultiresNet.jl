@@ -132,7 +132,7 @@ module MultiresNet
 
     Function to flatten first two dimensions of 4D array into 3D array
     """
-    function flatten_image(img::Array{T,4}) where T
+    function flatten_image(img::AbstractArray{T,4}) where T
         reshape(img, prod(size(img)[1:2]),size(img)[3:end]...)
     end
 end
