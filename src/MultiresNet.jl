@@ -3,6 +3,7 @@ module MultiresNet
     using Flux.NNlib: glu
     using CUDA
     using Zygote
+    using ChainRulesCore
     CUDA.allowscalar(false)
     Zygote.@adjoint CUDA.zeros(x...) = CUDA.zeros(x...), _ -> map(_ -> nothing, x)
 
@@ -24,19 +25,19 @@ module MultiresNet
         permutedims(x, (2,1,3))
     end
 
-    struct MultiresBlock
-        h0::AbstractArray
-        h1::AbstractArray
-        w::AbstractArray
+    struct MultiresBlock{H,W}
+        h0::H
+        h1::H
+        w::W
     end
     @functor MultiresBlock
 
-    function init(dims...)
-        (rand(dims...) .- 1.0) .* sqrt(2.0 / (prod(dims) * 2))
+    function init(dims::Integer...)
+        (rand(Float32, dims...) .- 1.0f0) .* sqrt(2.0f0 / (prod(dims) * 2.0f0))
     end
-
-    function w_init(dims...; depth::Int)
-        (rand(dims...) .- 1.0) .* sqrt(2.0 / ((2*(depth + 1) + 2)))
+    
+    function w_init(dims::Integer...; depth::Integer=1)
+        (rand(Float32, dims...) .- 1.0f0) .* sqrt(2.0f0 / (2.0f0*depth + 2.0f0))
     end
 
     """
@@ -51,18 +52,21 @@ module MultiresNet
         MultiresBlock(h0, h1, w)
     end
 
+    function zero_array_like(xin)
+        y = fill!(similar(xin), 0)
+    end
+    
+    @non_differentiable zero_array_like(x)
+
     """
         (m::MultiresBlock)(xin; σ=gelu)
 
     Object-like function that takes input data through the MultiresBlock
     """
-    function (m::MultiresBlock)(xin; σ=gelu)
-        kernel_size=size(m.h0)[1]
-        depth = size(m.w)[3]-2
-        d_channels = size(xin)[2]
+    function (m::MultiresBlock)(xin::AbstractArray{Float32}; σ=gelu)
+        kernel_size, depth, groups = size(m.h0)[1], size(m.w)[3]-2, size(xin)[2]
         res_lo = xin
-        y = isa(xin, CuArray) ? CUDA.zeros(eltype(xin), size(xin)) : zeros(eltype(xin), size(xin))
-        groups = size(xin)[2]
+        y = zero_array_like(xin)
         for i in depth:-1:1
             exponent = depth-i
             padding = (2^exponent) * (kernel_size -1)
@@ -74,7 +78,7 @@ module MultiresNet
         y = y .+ (xin .*m.w[:,:,end])
         σ.(y)
     end
-
+    
     struct EmbeddBlock
         conv
     end
