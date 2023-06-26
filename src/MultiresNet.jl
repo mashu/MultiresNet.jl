@@ -25,10 +25,10 @@ module MultiresNet
         permutedims(x, (2,1,3))
     end
 
-    struct MultiresBlock{H,W}
+    struct MultiresBlock{H<:AbstractArray{Float32,3}}
         h0::H
         h1::H
-        w::W
+        w::H
     end
     @functor MultiresBlock
 
