@@ -52,10 +52,10 @@ module MultiresNet
         MultiresBlock(h0, h1, w)
     end
 
-    function zero_array_like(xin)
+    function zero_array_like(xin::AbstractArray{Float32})
         y = fill!(similar(xin), 0)
     end
-    
+
     @non_differentiable zero_array_like(x)
 
     """
@@ -63,7 +63,7 @@ module MultiresNet
 
     Object-like function that takes input data through the MultiresBlock
     """
-    function (m::MultiresBlock)(xin::AbstractArray{Float32}; σ=gelu)
+    function (m::MultiresBlock)(xin::AbstractArray{Float32}; activation=gelu)
         kernel_size, depth, groups = size(m.h0)[1], size(m.w)[3]-2, size(xin)[2]
         res_lo = xin
         y = zero_array_like(xin)
@@ -76,7 +76,7 @@ module MultiresNet
         end
         y = y .+ (res_lo .* m.w[:,:,1])
         y = y .+ (xin .*m.w[:,:,end])
-        σ.(y)
+        activation.(y)
     end
     
     struct EmbeddBlock
