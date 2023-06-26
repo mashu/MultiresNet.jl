@@ -47,8 +47,8 @@ batch_size = 64
 drop = 0.1
 
 trainset_x, trainset_y, testset_x, testset_y = load_cifar_data()
-trainloader = Flux.DataLoader((trainset_x, trainset_y), batchsize=batch_size, shuffle=true, parallel=true)
-testloader = Flux.DataLoader((testset_x, testset_y), batchsize=batch_size, shuffle=false)
+trainloader = Flux.DataLoader((trainset_x, trainset_y), batchsize=batch_size, shuffle=true, parallel=true, buffer=true)
+testloader = Flux.DataLoader((testset_x, testset_y), batchsize=batch_size, shuffle=false, parallel=true, buffer=true)
 
 model = Chain(
     MultiresNet.EmbeddBlock(d_input, d_model),
