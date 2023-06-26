@@ -9,8 +9,31 @@ CUDA.math_mode!(CUDA.FAST_MATH)
 using ParameterSchedulers: Stateful, next!
 using ParameterSchedulers
 
+"""
+    correct(ŷ,y)
+
+Function computes the number of correct predictions.
+"""
 function correct(ŷ,y)
     sum(onecold(ŷ, 0:9) .== y)
+end
+
+"""
+    load_cifar_data()
+
+Function that loads the CIFAR10 dataset and returns
+the training and test sets with first two dimenions flatten.
+"""
+function load_cifar_data()
+    # load the CIFAR10 dataset
+    trainset_x, trainset_y = CIFAR10(split=:train)[:]
+    testset_x, testset_y = CIFAR10(split=:test)[:]
+
+    # flatten the first two dimensions
+    trainset_x = reshape(trainset_x, :, size(trainset_x, 3), size(trainset_x, 4))
+    testset_x = reshape(testset_x, :, size(testset_x, 3), size(testset_x, 4))
+
+    return trainset_x, trainset_y, testset_x, testset_y
 end
 
 # Hyperparameters
@@ -23,10 +46,9 @@ kernel_size = 2
 batch_size = 64
 drop = 0.1
 
-trainset = CIFAR10(:train)
-testset = CIFAR10(:test)
-trainloader = Flux.DataLoader(trainset, batchsize=batch_size, shuffle=true, parallel=true)
-testloader = Flux.DataLoader(testset, batchsize=batch_size, shuffle=false)
+trainset_x, trainset_y, testset_x, testset_y = load_cifar_data()
+trainloader = Flux.DataLoader((trainset_x, trainset_y), batchsize=batch_size, shuffle=true, parallel=true)
+testloader = Flux.DataLoader((testset_x, testset_y), batchsize=batch_size, shuffle=false)
 
 model = Chain(
     MultiresNet.EmbeddBlock(d_input, d_model),
@@ -117,14 +139,14 @@ for epoch in 1:n
     train_correct = 0
     test_loss = 0
     test_correct = 0
-    test_total = length(testset)
-    train_total = length(trainset)
+    test_total = length(testset_y)
+    train_total = length(trainset_y)
     ProgressMeter.next!(p; showvalues = [(:epoch, epoch), (:eta, optim[2][1].eta)])
     # Run trainset
     for (batch_ind, batch) in enumerate(CUDA.CuIterator(trainloader))
         input, target = batch
-        x = Float32.(MultiresNet.flatten_image(input))  # 1024 x 3 x 128 (seq x channels x batch)
-        y = onehotbatch(target, 0:9)                    # 10 x 128 (class x batch)
+        x = Float32.(input)
+        y = onehotbatch(target, 0:9)
         let y_hat
             loss, grads = Flux.withgradient(ps) do
                 y_hat = model(x)
@@ -139,7 +161,7 @@ for epoch in 1:n
     # Run testset
     for (test_batch_ind, test_batch) in enumerate(CUDA.CuIterator(testloader))
         test_input, test_target = test_batch
-        test_x = Float32.(MultiresNet.flatten_image(test_input))
+        test_x = Float32.(test_input)
         test_y = onehotbatch(test_target, 0:9)
         test_y_hat = model(test_x)
         test_loss += Flux.Losses.logitcrossentropy(test_y_hat, test_y)
