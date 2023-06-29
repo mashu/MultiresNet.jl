@@ -79,8 +79,8 @@ module MultiresNet
         activation.(y)
     end
     
-    struct EmbeddBlock
-        conv
+    struct EmbeddBlock{T}
+        conv::T
     end
     @functor EmbeddBlock
     function EmbeddBlock(channels_in::Int, channels_out::Int; σ=gelu)
@@ -97,8 +97,8 @@ module MultiresNet
         m.conv(zin)
     end
 
-    struct ChannelLayerNorm
-        norm
+    struct ChannelLayerNorm{T}
+        norm::T
     end
     @functor ChannelLayerNorm
 
@@ -121,8 +121,8 @@ module MultiresNet
         flip_dims(m.norm(flip_dims(zin)))
     end
 
-    struct MixingBlock
-        conv
+    struct MixingBlock{T}
+        conv::T
     end
     @functor MixingBlock
     function MixingBlock(channels::Int)
