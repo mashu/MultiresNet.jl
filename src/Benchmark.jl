@@ -11,52 +11,56 @@ using Zygote: pullback
 d_input = 3
 d_output = 10
 max_length = 1024
-d_model = 256
+d_model = 64 # Orignal model 256
 depth = 10
 kernel_size = 2
-drop = 0.1
+drop = 0.25
 batch_size = 64
 
-# Load data
-trainset = CIFAR10(:train)
-trainloader = Flux.DataLoader(trainset, batchsize=batch_size, shuffle=true, parallel=true)
+function load_cifar_data()
+    # load the CIFAR10 dataset
+    trainset_x, trainset_y = CIFAR10(split=:train)[:]
 
-emb = MultiresNet.EmbeddBlock(d_input, d_model)
-model = MultiresNet.MultiresBlock(d_model, depth, kernel_size) |> gpu
-ps = Flux.params(model)
+    # onehot
+    trainset_y = onehotbatch(trainset_y, 0:9)
 
-batch = first(trainloader)
-input, target = batch
-x = emb(Float32.(MultiresNet.flatten_image(input))) |> gpu
-y = onehotbatch(target, 0:9)    |> gpu
+    # flatten the first two dimensions
+    trainset_x = CUDA.Mem.pin(reshape(trainset_x, :, size(trainset_x, 3), size(trainset_x, 4)))
 
-@info "1 layer"
-z = model(x);
-CUDA.@time model(x);
-CUDA.@time model(x);
-CUDA.@time model(x);
-
-big_model = Chain([MultiresNet.MultiresBlock(d_model, depth, kernel_size) for _ in 1:10]...) |> gpu
-z = big_model(x);
-@info "Chain of 10 layers"
-CUDA.@time big_model(x);
-CUDA.@time big_model(x);
-CUDA.@time big_model(x);
-
-function train(x)
-    let y_hat
-        _, back = pullback(big_model, x)
-    end
+    return trainset_x, trainset_y
 end
 
-train(x);
-@info "Pullback time 10 layers"
-CUDA.@time train(x);
-CUDA.@time train(x);
-CUDA.@time train(x);
-model(x);
-@info "Forward pass 10 layers"
-CUDA.@time big_model(x);
-CUDA.@time big_model(x);
-CUDA.@time big_model(x);
-"Finished"
+# Load
+trainset_x, trainset_y = load_cifar_data()
+trainloader = Flux.DataLoader((trainset_x, trainset_y), batchsize=batch_size, shuffle=true, parallel=true)
+batch = first(trainloader)
+input, target = batch
+x = input  |> gpu
+y = target |> gpu
+
+model1 = Chain(MultiresNet.EmbeddBlock(d_input, d_model)) |> gpu
+model2 = Chain(MultiresNet.EmbeddBlock(d_input, d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size)) |> gpu
+model3 = Chain(MultiresNet.EmbeddBlock(d_input, d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size),
+               MultiresNet.MixingBlock(d_model)) |> gpu
+model4 = Chain(MultiresNet.EmbeddBlock(d_input, d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size),
+               MultiresNet.MixingBlock(d_model),
+               MultiresNet.ChannelLayerNorm(d_model)) |> gpu
+model5 = Chain(MultiresNet.EmbeddBlock(d_input, d_model),
+               SkipConnection(Chain(
+                    MultiresNet.MultiresBlock(d_model, depth, kernel_size),
+                    MultiresNet.MixingBlock(d_model),
+               ),+),
+               MultiresNet.ChannelLayerNorm(d_model)) |> gpu
+
+models = [model1, model2, model3, model4, model5]
+
+for (i,model) in enumerate(models)
+    @info "Model $i"
+    z = model(x); # Precompile
+    CUDA.@time model(x);
+    CUDA.@time model(x);
+    CUDA.@time model(x);
+end

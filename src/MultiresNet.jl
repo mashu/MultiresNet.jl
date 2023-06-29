@@ -1,11 +1,44 @@
 module MultiresNet
-    using Flux: conv, Conv, glorot_uniform, gelu, @functor, unsqueeze, LayerNorm
-    using Flux.NNlib: glu
+    using Flux: conv, Conv, glorot_uniform, gelu, @functor, unsqueeze, LayerNorm, sigmoid
     using CUDA
     using Zygote
     using ChainRulesCore
     CUDA.allowscalar(false)
     Zygote.@adjoint CUDA.zeros(x...) = CUDA.zeros(x...), _ -> map(_ -> nothing, x)
+
+    function pairwise_mul_kernel!(output::CuDeviceArray{Float32, 3, 1}, input::CuDeviceArray{Float32, 3, 1}, dim::Int)
+        idx = threadIdx().x + blockDim().x * (blockIdx().x - 1)
+        idy = threadIdx().y + blockDim().y * (blockIdx().y - 1)
+        idz = threadIdx().z + blockDim().z * (blockIdx().z - 1)
+        
+        if (dim == 1 && idx ≤ size(input, 1) ÷ 2 && idy ≤ size(input, 2) && idz ≤ size(input, 3)) ||
+        (dim == 2 && idx ≤ size(input, 1) && idy ≤ size(input, 2) ÷ 2 && idz ≤ size(input, 3)) ||
+        (dim == 3 && idx ≤ size(input, 1) && idy ≤ size(input, 2) && idz ≤ size(input, 3) ÷ 2)
+            if dim == 1
+                @inbounds output[idx, idy, idz] = input[idx, idy, idz] * (1 / (1 + exp(-input[idx + size(input, 1) ÷ 2, idy, idz])))
+            elseif dim == 2
+                @inbounds output[idx, idy, idz] = input[idx, idy, idz] * (1 / (1 + exp(-input[idx, idy + size(input, 2) ÷ 2, idz])))
+            else
+                @inbounds output[idx, idy, idz] = input[idx, idy, idz] * (1 / (1 + exp(-input[idx, idy, idz + size(input, 3) ÷ 2])))
+            end
+        end
+        return
+    end
+
+    function glu(input::CuArray{Float32,3}, dim::Integer)
+        # Define the dimensions of the output array
+        output_dims = ntuple(i -> i == dim ? size(input, i) ÷ 2 : size(input, i), 3)
+        output = CUDA.zeros(Float32, output_dims)
+
+        # Number of threads and blocks
+        threads = (8, 8, 8)
+        blocks = (ceil(Int, output_dims[1]/threads[1]), ceil(Int, output_dims[2]/threads[2]), ceil(Int, output_dims[3]/threads[3]))
+
+        # Run the kernel
+        @cuda threads=threads blocks=blocks pairwise_mul_kernel!(output, input, dim)
+
+        return output
+    end
 
     """
         reverse_dims(x)
