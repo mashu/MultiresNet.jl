@@ -38,20 +38,20 @@ input, target = batch
 x = input  |> gpu
 y = target |> gpu
 
-model1 = Chain(MultiresNet.EmbeddBlock(d_input, d_model)) |> gpu
-model2 = Chain(MultiresNet.EmbeddBlock(d_input, d_model),
-               MultiresNet.MultiresBlock(d_model, depth, kernel_size)) |> gpu
-model3 = Chain(MultiresNet.EmbeddBlock(d_input, d_model),
-               MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-               MultiresNet.MixingBlock(d_model)) |> gpu
-model4 = Chain(MultiresNet.EmbeddBlock(d_input, d_model),
-               MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-               MultiresNet.MixingBlock(d_model),
+model1 = Chain(MultiresNet.EmbeddLayer(d_input, d_model)) |> gpu
+model2 = Chain(MultiresNet.EmbeddLayer(d_input, d_model),
+               MultiresNet.MultiresLayer(d_model, depth, kernel_size)) |> gpu
+model3 = Chain(MultiresNet.EmbeddLayer(d_input, d_model),
+               MultiresNet.MultiresLayer(d_model, depth, kernel_size),
+               MultiresNet.MixingLayer(d_model)) |> gpu
+model4 = Chain(MultiresNet.EmbeddLayer(d_input, d_model),
+               MultiresNet.MultiresLayer(d_model, depth, kernel_size),
+               MultiresNet.MixingLayer(d_model),
                MultiresNet.ChannelLayerNorm(d_model)) |> gpu
-model5 = Chain(MultiresNet.EmbeddBlock(d_input, d_model),
+model5 = Chain(MultiresNet.EmbeddLayer(d_input, d_model),
                SkipConnection(Chain(
-                    MultiresNet.MultiresBlock(d_model, depth, kernel_size),
-                    MultiresNet.MixingBlock(d_model),
+                    MultiresNet.MultiresLayer(d_model, depth, kernel_size),
+                    MultiresNet.MixingLayer(d_model),
                ),+),
                MultiresNet.ChannelLayerNorm(d_model)) |> gpu
 

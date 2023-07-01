@@ -1,12 +1,19 @@
 module MultiresNet
     using Flux: conv, Conv, glorot_uniform, gelu, @functor, unsqueeze, LayerNorm, sigmoid
+    using Flux
     using CUDA
     using Zygote
     using ChainRulesCore
     CUDA.allowscalar(false)
+
     Zygote.@adjoint CUDA.zeros(x...) = CUDA.zeros(x...), _ -> map(_ -> nothing, x)
 
-    function pairwise_mul_kernel!(output::CuDeviceArray{Float32, 3, 1}, input::CuDeviceArray{Float32, 3, 1}, dim::Int)
+    """
+        glu_kernel(output::CuDeviceArray{Float32, 3, 1}, input::CuDeviceArray{Float32, 3, 1}, dim::Int)
+
+    Kernel for GLU function for CUDA
+    """
+    function glu_kernel!(output::CuDeviceArray{Float32, 3, 1}, input::CuDeviceArray{Float32, 3, 1}, dim::Int)
         idx = threadIdx().x + blockDim().x * (blockIdx().x - 1)
         idy = threadIdx().y + blockDim().y * (blockIdx().y - 1)
         idz = threadIdx().z + blockDim().z * (blockIdx().z - 1)
@@ -25,6 +32,11 @@ module MultiresNet
         return
     end
 
+    """
+        glu(input::CuArray{Float32,3}, dim::Integer)
+
+    Custom GLU function for CUDA, temporarily unused because custom @rrule is required
+    """
     function glu(input::CuArray{Float32,3}, dim::Integer)
         # Define the dimensions of the output array
         output_dims = ntuple(i -> i == dim ? size(input, i) ÷ 2 : size(input, i), 3)
@@ -58,31 +70,72 @@ module MultiresNet
         permutedims(x, (2,1,3))
     end
 
-    struct MultiresBlock{H<:AbstractArray{Float32,3}}
+    struct MultiresLayer{H<:AbstractArray{Float32,3}}
         h0::H
         h1::H
         w::H
     end
+    @functor MultiresLayer
+
+    struct MultiresBlock{T}
+        conv::T
+    end
     @functor MultiresBlock
 
+    """
+        MultiresBlock(d_model::Int, depth::Int, kernel_size::Int)
+    
+    Basic MultiresBlock building block for layer that performes multiresolution convolution
+    """
+    function MultiresBlock(d_model::Int, depth::Int, kernel_size::Int, drop::Float32)
+        conv = SkipConnection(
+                Chain(
+                    MultiresLayer(d_model, depth, kernel_size),
+                    Dropout(drop, dims=2),
+                    MixingLayer(d_model),
+                    Dropout(drop, dims=2)
+                    ),
+                +)
+        MultiresBlock(conv)
+    end
+
+    """
+        (m::MultiresBlock)(xin)
+    
+    Forward pass through MultiresBlock
+    """
+    function (m::MultiresBlock)(xin)
+        m.conv(xin)
+    end
+
+    """
+        init(dims::Integer...)
+
+    Simpified initialization function for weights as in the original paper
+    """
     function init(dims::Integer...)
         (rand(Float32, dims...) .- 1.0f0) .* sqrt(2.0f0 / (prod(dims) * 2.0f0))
     end
     
+    """
+        w_init(dims::Integer...; depth::Integer=1)
+
+    Simpified initialization function for weights as in the original paper
+    """
     function w_init(dims::Integer...; depth::Integer=1)
         (rand(Float32, dims...) .- 1.0f0) .* sqrt(2.0f0 / (2.0f0*depth + 2.0f0))
     end
 
     """
-        MultiresBlock(channels, depth, kernel_size)
+        MultiresLayer(channels, depth, kernel_size)
 
-    Basic MultiresBlock building block for layer that performes multiresolution convolution without mixing
+    Basic MultiresLayer building block for layer that performes multiresolution convolution without mixing
     """
-    function MultiresBlock(channels::Int, depth::Int, kernel_size::Int; init=init, w_init=w_init)
+    function MultiresLayer(channels::Int, depth::Int, kernel_size::Int; init=init, w_init=w_init)
         h0 = init(kernel_size, 1, channels)
         h1 = init(kernel_size, 1, channels)
         w = unsqueeze(w_init(channels, depth + 2, depth=depth), dims=1)
-        MultiresBlock(h0, h1, w)
+        MultiresLayer(h0, h1, w)
     end
 
     function zero_array_like(xin::AbstractArray{Float32})
@@ -92,11 +145,11 @@ module MultiresNet
     @non_differentiable zero_array_like(x)
 
     """
-        (m::MultiresBlock)(xin; σ=gelu)
+        (m::MultiresLayer)(xin; σ=gelu)
 
-    Object-like function that takes input data through the MultiresBlock
+    Object-like function that takes input data through the MultiresLayer
     """
-    function (m::MultiresBlock)(xin::AbstractArray{Float32}; activation=gelu)
+    function (m::MultiresLayer)(xin::AbstractArray{Float32}; activation=gelu)
         kernel_size, depth, groups = size(m.h0)[1], size(m.w)[3]-2, size(xin)[2]
         res_lo = xin
         y = zero_array_like(xin)
@@ -112,21 +165,21 @@ module MultiresNet
         activation.(y)
     end
     
-    struct EmbeddBlock{T}
+    struct EmbeddLayer{T}
         conv::T
     end
-    @functor EmbeddBlock
-    function EmbeddBlock(channels_in::Int, channels_out::Int; σ=gelu)
+    @functor EmbeddLayer
+    function EmbeddLayer(channels_in::Int, channels_out::Int; σ=gelu)
         conv = Conv((1,), channels_in => channels_out, σ)
-        EmbeddBlock(conv)
+        EmbeddLayer(conv)
     end
 
     """
-        (m::EmbeddBlock)(zin)
+        (m::EmbeddLayer)(zin)
 
     Object-like function applying embedding with convolution
     """
-    function (m::EmbeddBlock)(zin)
+    function (m::EmbeddLayer)(zin)
         m.conv(zin)
     end
 
@@ -154,22 +207,22 @@ module MultiresNet
         flip_dims(m.norm(flip_dims(zin)))
     end
 
-    struct MixingBlock{T}
+    struct MixingLayer{T}
         conv::T
     end
-    @functor MixingBlock
-    function MixingBlock(channels::Int)
+    @functor MixingLayer
+    function MixingLayer(channels::Int)
         conv = Conv((1,), channels=>2*channels)
-        MixingBlock(conv)
+        MixingLayer(conv)
     end
 
     """
-        (m::MixingBlock)(zin)
+        (m::MixingLayer)(zin)
 
     Object-like function applying mixing layer to convolved input
     """
-    function (m::MixingBlock)(zin)
-        glu(m.conv(zin),2)
+    function (m::MixingLayer)(zin)
+        Flux.NNlib.glu(m.conv(zin),2)
     end
 
     """

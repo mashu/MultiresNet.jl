@@ -20,7 +20,7 @@ using Flux
     w[1,:] .= [1.0, 2.0, 3.0, 5.0, 6.0, 7.0]
     w[2,:] .= [1.0, 2.0, 3.0, 6.0, 7.0, 8.0]
     w[3,:] .= [3.0, 4.0, 5.0, 7.0, 8.0, 9.0]
-    seq_block = MultiresNet.MultiresBlock(MultiresNet.reverse_dims(h), MultiresNet.reverse_dims(h), Flux.unsqueeze(w, dims=1))
+    seq_block = MultiresNet.MultiresLayer(MultiresNet.reverse_dims(h), MultiresNet.reverse_dims(h), Flux.unsqueeze(w, dims=1))
     @test seq_block != nothing
     # Test if forward pass matches
     output = seq_block(MultiresNet.reverse_dims(x))[:,:,1]'
