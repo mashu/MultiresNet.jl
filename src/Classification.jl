@@ -6,8 +6,8 @@ using ProgressMeter
 using CUDA
 using JLD2
 CUDA.math_mode!(CUDA.FAST_MATH)
-using ParameterSchedulers: Stateful, next!
-using ParameterSchedulers
+using ParameterSchedulers: Stateful, next!, CosAnneal
+using Optimisers
 
 """
     correct(ŷ,y)
@@ -79,8 +79,9 @@ trainloader = Flux.DataLoader((trainset_x, trainset_y), batchsize=batch_size, sh
 testloader = Flux.DataLoader((testset_x, testset_y), batchsize=batch_size, shuffle=false, parallel=true, buffer=true)
 
 model = Chain(
-    # Block 1
+    # Embedding
     MultiresNet.EmbeddLayer(d_input, d_model),
+    # Block 1
     MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
     MultiresNet.ChannelLayerNorm(d_model),
     # Block 2
@@ -109,21 +110,21 @@ model = Chain(
     MultiresNet.ChannelLayerNorm(d_model),
     # Block 10
     MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
-    MultiresNet.ChannelLayerNorm(d_model),    
+    MultiresNet.ChannelLayerNorm(d_model),
+    # Classifier
     GlobalMeanPool(),
     Flux.flatten,
     Dense(d_model, d_output)) |> gpu
 
 schedule = Stateful(CosAnneal(λ0 = 1f-4, λ1 = 1f-2, period = 50, restart=false))
-optim = Flux.Optimiser(Flux.WeightDecay(1f-3), Flux.AdamW(0.0045f0))
-ps = Flux.params(model)
+rule = Optimisers.AdamW(0.0045f0, (9f-1, 9.99f-1), 0.01f0)
+state_tree = Optimisers.setup(rule, model);
 
 # Training loop
 n = 500
 for epoch in 1:n
-    optim[2][1].eta = next!(schedule)
     train_loss = 0f0
-    # train_correct = 0f0
+    train_correct = 0f0
     test_loss = 0f0
     test_correct = 0f0
     test_total = Float32(length(testset_y))
@@ -131,31 +132,33 @@ for epoch in 1:n
     # Run trainset
     for (batch_ind, batch) in enumerate(trainloader)
         input, target = batch
-        x = input  |> gpu
-        y = target |> gpu
-        let y_hat
-            loss, grads = Flux.withgradient(ps) do
-                y_hat = model(x)
-                Flux.Losses.logitcrossentropy(y_hat, y)
+        input = input   |> gpu
+        target = target |> gpu
+        let ŷ
+            loss, (grads, _) = Flux.withgradient(model, input) do m, x
+                ŷ = m(x)
+                Flux.Losses.logitcrossentropy(ŷ, target)
             end
-            Flux.update!(optim, ps, grads)
+            # Update the model
+            Optimisers.update!(state_tree, model, grads);
+            # Update learning rate according to schedule
+            Optimisers.adjust!(state_tree, next!(schedule))
             # Update training statistics
-            # train_correct += correct(y_hat, target)
+            train_correct += correct(ŷ, target)
             train_loss += loss
-        end      
+        end
     end
     # Run testset
     for (test_batch_ind, test_batch) in enumerate(testloader)
         test_input, test_target = test_batch
         test_x = test_input  |> gpu
         test_y = test_target |> gpu
-        test_y_hat = model(test_x)
-        test_loss += Flux.Losses.logitcrossentropy(test_y_hat, test_y)
-        test_correct += correct(test_y_hat, test_target)
+        test_ŷ = model(test_x)
+        test_loss += Flux.Losses.logitcrossentropy(test_ŷ, test_y)
+        test_correct += correct(test_ŷ, test_y)
     end
     # Compute statistics
-    # println("Epoch $epoch, Train loss: $(train_loss*batch_size/train_total) Test loss: $(test_loss*batch_size/test_total) Train acc: $(train_correct/train_total) Test acc: $(test_correct/test_total)")
-    println("Epoch $epoch, Train loss: $(train_loss*batch_size/train_total) Test loss: $(test_loss*batch_size/test_total) Test acc: $(test_correct/test_total)")
+    println("Epoch $epoch, Train loss: $(train_loss*batch_size/train_total) Test loss: $(test_loss*batch_size/test_total) Train acc: $(train_correct/train_total) Test acc: $(test_correct/test_total)")
     # Checkpoint
     jldsave("model-epoch$(epoch).jld2", model_state = Flux.state(cpu(model)))
 end
