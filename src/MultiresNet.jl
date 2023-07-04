@@ -9,50 +9,6 @@ module MultiresNet
     Zygote.@adjoint CUDA.zeros(x...) = CUDA.zeros(x...), _ -> map(_ -> nothing, x)
 
     """
-        glu_kernel(output::CuDeviceArray{Float32, 3, 1}, input::CuDeviceArray{Float32, 3, 1}, dim::Int)
-
-    Kernel for GLU function for CUDA
-    """
-    function glu_kernel!(output::CuDeviceArray{Float32, 3, 1}, input::CuDeviceArray{Float32, 3, 1}, dim::Int)
-        idx = threadIdx().x + blockDim().x * (blockIdx().x - 1)
-        idy = threadIdx().y + blockDim().y * (blockIdx().y - 1)
-        idz = threadIdx().z + blockDim().z * (blockIdx().z - 1)
-        
-        if (dim == 1 && idx ≤ size(input, 1) ÷ 2 && idy ≤ size(input, 2) && idz ≤ size(input, 3)) ||
-        (dim == 2 && idx ≤ size(input, 1) && idy ≤ size(input, 2) ÷ 2 && idz ≤ size(input, 3)) ||
-        (dim == 3 && idx ≤ size(input, 1) && idy ≤ size(input, 2) && idz ≤ size(input, 3) ÷ 2)
-            if dim == 1
-                @inbounds output[idx, idy, idz] = input[idx, idy, idz] * (1 / (1 + exp(-input[idx + size(input, 1) ÷ 2, idy, idz])))
-            elseif dim == 2
-                @inbounds output[idx, idy, idz] = input[idx, idy, idz] * (1 / (1 + exp(-input[idx, idy + size(input, 2) ÷ 2, idz])))
-            else
-                @inbounds output[idx, idy, idz] = input[idx, idy, idz] * (1 / (1 + exp(-input[idx, idy, idz + size(input, 3) ÷ 2])))
-            end
-        end
-        return
-    end
-
-    """
-        glu(input::CuArray{Float32,3}, dim::Integer)
-
-    Custom GLU function for CUDA, temporarily unused because custom @rrule is required
-    """
-    function glu(input::CuArray{Float32,3}, dim::Integer)
-        # Define the dimensions of the output array
-        output_dims = ntuple(i -> i == dim ? size(input, i) ÷ 2 : size(input, i), 3)
-        output = CUDA.zeros(Float32, output_dims)
-
-        # Number of threads and blocks
-        threads = (8, 8, 8)
-        blocks = (ceil(Int, output_dims[1]/threads[1]), ceil(Int, output_dims[2]/threads[2]), ceil(Int, output_dims[3]/threads[3]))
-
-        # Run the kernel
-        @cuda threads=threads blocks=blocks pairwise_mul_kernel!(output, input, dim)
-
-        return output
-    end
-
-    """
         reverse_dims(x)
 
     Reverse all dimensions in 3D array
@@ -149,28 +105,48 @@ module MultiresNet
 
     Object-like function that takes input data through the MultiresLayer
     """
-    function (m::MultiresLayer)(xin::AbstractArray{Float32}; activation=gelu)
+    function (m::MultiresLayer)(xin::AbstractArray{Float32}; activation=gelu) :: AbstractArray{Float32}
         kernel_size, depth, groups = size(m.h0)[1], size(m.w)[3]-2, size(xin)[2]
         res_lo = xin
         y = zero_array_like(xin)
+    
         for i in depth:-1:1
             exponent = depth-i
-            padding = (2^exponent) * (kernel_size -1)
-            res_hi = conv(res_lo, m.h1, dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
-            res_lo = conv(res_lo, m.h0, dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
-            y = y .+ (res_hi .* m.w[:,:,i+1])
+            res_hi = conv_pad(res_lo, m.h1, exponent, kernel_size, groups)
+            res_lo = conv_pad(res_lo, m.h0, exponent, kernel_size, groups)
+            y = y .+ weight_multiplication(res_hi, m.w, i+1)
         end
-        y = y .+ (res_lo .* m.w[:,:,1])
-        y = y .+ (xin .*m.w[:,:,end])
-        activation.(y)
+    
+        y = y .+ weight_multiplication(res_lo, m.w, 1)
+        y = y .+ weight_multiplication(xin, m.w, depth+2)
+        return activation.(y)
     end
     
+    """
+        conv_pad(res::AbstractArray{Float32}, h::AbstractArray{Float32}, exponent::Int, kernel_size::Int, groups::Int) :: AbstractArray{Float32}
+
+    Function that performs convolution with padding
+    """
+    @inline function conv_pad(res::AbstractArray{Float32}, h::AbstractArray{Float32}, exponent::Int, kernel_size::Int, groups::Int) :: AbstractArray{Float32}
+        padding = (2^exponent) * (kernel_size -1)
+        return conv(res, h, dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
+    end
+    
+    """
+        weight_multiplication(res::AbstractArray{Float32}, weights::AbstractArray{Float32}, index::Int) :: AbstractArray{Float32}
+    
+    Function that performs multiplication of input with weights
+    """
+    @inline function weight_multiplication(res::AbstractArray{Float32}, weights::AbstractArray{Float32}, index::Int) :: AbstractArray{Float32}
+        return res .* weights[:,:,index]
+    end
+
     struct EmbeddLayer{T}
         conv::T
     end
     @functor EmbeddLayer
-    function EmbeddLayer(channels_in::Int, channels_out::Int; σ=gelu)
-        conv = Conv((1,), channels_in => channels_out, σ)
+    function EmbeddLayer(channels_in::Int, channels_out::Int)
+        conv = Conv((1,), channels_in => channels_out)
         EmbeddLayer(conv)
     end
 
