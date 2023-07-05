@@ -14,7 +14,7 @@ max_length = 1024
 d_model = 64 # Orignal model 256
 depth = 10
 kernel_size = 2
-drop = 0.25
+drop = 0.25f0
 batch_size = 64
 
 function load_cifar_data()
@@ -55,7 +55,47 @@ model5 = Chain(MultiresNet.EmbeddLayer(d_input, d_model),
                ),+),
                MultiresNet.ChannelLayerNorm(d_model)) |> gpu
 
-models = [model1, model2, model3, model4, model5]
+model6 = Chain(MultiresNet.EmbeddLayer(d_input, d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model)) |> gpu
+
+model7 = Chain(MultiresNet.EmbeddLayer(d_input, d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model)) |> gpu
+
+model8 = Chain(MultiresNet.EmbeddLayer(d_input, d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model)) |> gpu
+
+model9 = Chain(MultiresNet.EmbeddLayer(d_input, d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model)) |> gpu
+
+model10 = Chain(MultiresNet.EmbeddLayer(d_input, d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model),
+               MultiresNet.MultiresBlock(d_model, depth, kernel_size, drop),
+               MultiresNet.ChannelLayerNorm(d_model)) |> gpu
+
+models = [model1, model2, model3, model4, model5, model6, model7, model8, model9]
 
 for (i,model) in enumerate(models)
     @info "Model $i"
@@ -63,4 +103,12 @@ for (i,model) in enumerate(models)
     CUDA.@time model(x);
     CUDA.@time model(x);
     CUDA.@time model(x);
+end
+
+for (i,model) in enumerate(models)
+    @info "Pullback model $i"
+    z = pullback(model,x); # Precompile
+    CUDA.@time pullback(model, x);
+    CUDA.@time pullback(model, x);
+    CUDA.@time pullback(model, x);
 end
