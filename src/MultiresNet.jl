@@ -106,14 +106,14 @@ module MultiresNet
     Object-like function that takes input data through the MultiresLayer
     """
     function (m::MultiresLayer)(xin::AbstractArray{Float32}; activation=gelu) :: AbstractArray{Float32}
-        kernel_size, depth = size(m.h0)[1], size(m.w)[3]-2
+        kernel_size, depth, groups = size(m.h0)[1], size(m.w)[3]-2, size(xin)[2]
         res_lo = xin
         y = zero_array_like(xin)
     
         for i in depth:-1:1
             exponent = depth-i
-            res_hi = conv_pad(res_lo, m.h1, exponent, kernel_size)
-            res_lo = conv_pad(res_lo, m.h0, exponent, kernel_size)
+            res_hi = conv_pad(res_lo, m.h1, exponent, kernel_size, groups)
+            res_lo = conv_pad(res_lo, m.h0, exponent, kernel_size, groups)
             y = y .+ weight_multiplication(res_hi, m.w, i+1)
         end
     
@@ -123,13 +123,13 @@ module MultiresNet
     end
     
     """
-        conv_pad(res::AbstractArray{Float32}, h::AbstractArray{Float32}, exponent::Int, kernel_size::Int) :: AbstractArray{Float32}
+        conv_pad(res::AbstractArray{Float32}, h::AbstractArray{Float32}, exponent::Int, kernel_size::Int, groups::Int) :: AbstractArray{Float32}
 
     Function that performs convolution with padding
     """
-    @inline function conv_pad(res::AbstractArray{Float32}, h::AbstractArray{Float32}, exponent::Int, kernel_size::Int) :: AbstractArray{Float32}
+    @inline function conv_pad(res::AbstractArray{Float32}, h::AbstractArray{Float32}, exponent::Int, kernel_size::Int, groups::Int) :: AbstractArray{Float32}
         padding = (2^exponent) * (kernel_size -1)
-        return depthwiseconv(res, h, dilation=2^exponent, flipped=true, pad=(padding,0))
+        return conv(res, h, dilation=2^exponent, groups=groups, flipped=true, pad=(padding,0))
     end
     
     """
