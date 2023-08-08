@@ -145,8 +145,8 @@ module MultiresNet
         conv::T
     end
     @functor EmbeddLayer
-    function EmbeddLayer(channels_in::Int, channels_out::Int)
-        conv = Conv((1,), channels_in => channels_out)
+    function EmbeddLayer(channels_in::Int, channels_out::Int, kernel_size=(1,), pad=(0,))
+        conv = Conv(kernel_size, channels_in => channels_out, pad=pad)
         EmbeddLayer(conv)
     end
 
@@ -187,8 +187,8 @@ module MultiresNet
         conv::T
     end
     @functor MixingLayer
-    function MixingLayer(channels::Int)
-        conv = Conv((1,), channels=>2*channels)
+    function MixingLayer(channels::Int, kernel_size=(1,), pad=(0,))
+        conv = Conv(kernel_size, channels=>2*channels, pad=pad)
         MixingLayer(conv)
     end
 
